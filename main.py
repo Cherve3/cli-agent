@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+from prompts import system_prompt
+from functions.call_function import available_functions
+
 def main():
     print("Hello from cli-agent!")
     load_dotenv()
@@ -20,7 +23,13 @@ def main():
 
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)] ) ]
 
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=messages)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash", 
+        contents=messages, 
+        config=types.GenerateContentConfig(
+            tools=[available_functions], system_instruction=system_prompt
+        )
+    )
 
     if args.verbose == True:
         if response.usage_metadata != None:
@@ -32,7 +41,11 @@ def main():
         else:
             raise RuntimeError("usage metadata returned None")
 
-    print(response.text)
+    if response.function_calls != None:
+        for function_call in response.function_calls:
+            print(f"Calling function: {function_call.name}({function_call.args})")
+    else:
+        print(response.text)
 
 if __name__ == "__main__":
     main()
