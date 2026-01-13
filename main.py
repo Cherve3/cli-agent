@@ -23,44 +23,56 @@ def main():
 
     messages = [types.Content(role="user", parts=[types.Part(text=args.user_prompt)] ) ]
 
-    response = client.models.generate_content(
-        model="gemini-2.5-flash", 
-        contents=messages, 
-        config=types.GenerateContentConfig(
-            tools=[available_functions], system_instruction=system_prompt
+    for i in range(20):
+        response = client.models.generate_content(
+            model="gemini-2.5-flash", 
+            contents=messages, 
+            config=types.GenerateContentConfig(
+                tools=[available_functions], system_instruction=system_prompt
+            )
         )
-    )
-
-    if args.verbose == True:
-        if response.usage_metadata != None:
-            prompt_tokens = response.usage_metadata.prompt_token_count
-            response_tokens = response.usage_metadata.candidates_token_count
-            print(f"User prompt: {args.user_prompt}")
-            print(f"Prompt tokens: {prompt_tokens}")
-            print(f"Response tokens: {response_tokens}")
+        
+        if response.candidates != []:
+            for candidate in response.candidates:
+                messages.append(candidate.content)
         else:
-            raise RuntimeError("usage metadata returned None")
+            raise RuntimeError("Error: No candidates returned in response")
+        
+        if args.verbose == True:
+            if response.usage_metadata != None:
+                prompt_tokens = response.usage_metadata.prompt_token_count
+                response_tokens = response.usage_metadata.candidates_token_count
+                print(f"User prompt: {args.user_prompt}")
+                print(f"Prompt tokens: {prompt_tokens}")
+                print(f"Response tokens: {response_tokens}")
+            else:
+                raise RuntimeError("Error: usage metadata returned None")
 
-    function_results_list = []
+        function_results_list = []
 
-    if response.function_calls != None:
-        for function_call in response.function_calls:
-            function_call_result = call_function(function_call, args.verbose)
-            
-            if function_call_result.parts[0].function_response == None:
-                raise Exception("Error: function response is None")
+        if response.function_calls != None:
+            for function_call in response.function_calls:
+                function_call_result = call_function(function_call, args.verbose)
+                
+                if function_call_result.parts[0].function_response == None:
+                    raise Exception("Error: function response is None")
 
-            if function_call_result.parts[0].function_response.response == None:
-                raise Exception("Error: function response content is None")
+                if function_call_result.parts[0].function_response.response == None:
+                    raise Exception("Error: function response content is None")
+                
+                function_results_list.append(function_call_result.parts[0])
+                
+                if args.verbose == True:
+                    print(f"-> {function_call_result.parts[0].function_response.response}")
+                
+                print(f"Calling function: {function_call.name}({function_call.args})")
+                
+            messages.append(types.Content(role="user", parts=function_results_list))
+        else:
+            print(response.text)
+            break
             
-            function_results_list.append(function_call_result.parts[0])
-            
-            if args.verbose == True:
-                print(f"-> {function_call_result.parts[0].function_response.response}")
-            
-            print(f"Calling function: {function_call.name}({function_call.args})")
-    else:
-        print(response.text)
+        
 
 if __name__ == "__main__":
     main()
